@@ -8,24 +8,33 @@ var widgetId = w.general.renderTo;
 var widgetAnchor = "#" + widgetId;
 var $widget = $(widgetAnchor);
 var globalColors = w.colors;
+
 var propertiesJson = JSON.parse(visApi().getWidgetByGuid(widgetId).widgetState.propertiesJson);
 var globalProperties = {
     lineWidth: propertiesJson.lineWidth || 6,
-    fixedLayout: propertiesJson.lineWidth === undefined ? false : propertiesJson.lineWidth
+    fixedLayout: propertiesJson.fixedLayout === true,
 };
 
-function randomIteratorFactory(varietiesNumber){
-    function* randomGenerator(varietiesNumber) {
-        var i = 0;
-        var preallocatedRandomValues = Array.apply(null, { length: varietiesNumber }).map(_ => Math.random());
-        while (1) yield preallocatedRandomValues[i++ % preallocatedRandomValues.length];
-    };
-    var preallocatedRandomValuesIterator = randomGenerator(varietiesNumber+1);
-    preallocatedRandomValuesIterator.next(); //activation
-    return preallocatedRandomValuesIterator;
-}
+if (!globalProperties.fixedLayout)
+    $widget.removeData("preallocatedRandomValues");
 
-var randomIterator = randomIteratorFactory(100);
+var preallocatedRandomValues = $widget.data("preallocatedRandomValues")
+    || Array.apply(null, { length: 100 }).map(_ => Math.random());
+
+$widget.data("preallocatedRandomValues", preallocatedRandomValues);
+
+function* randomGenerator() {
+    var i = 0;
+    while (1) yield preallocatedRandomValues[i++ % preallocatedRandomValues.length];
+};
+
+function guerillaPatchForRandom(func) {
+    var randomOriginal = Math.random;
+    var randomIterator = randomGenerator();
+    Math.random = () => randomIterator.next().value;
+    func();
+    Math.random = randomOriginal;
+}
 
 function convertToGraph(data, vertices, adjacencyList) {
 
@@ -104,12 +113,17 @@ function drawGraph(vertices, adjacencyList) {
 
     adjacencyList.map(edge => g.addEdge(edge.sourceVertex.vertexId, edge.targetVertex.vertexId, { fill: `darkgrey|${1 + globalProperties.lineWidth * adjacencyList.calcRelativeWeight(edge.edgeWeight)}`, stroke: "darkgrey" }));
 
-    var randomOriginal = Math.random;
-    Math.random = () => randomIterator.next().value;
-    var layouter = new Dracula.Layout.Spring(g);
-    layouter.layout();
-    Math.random = randomOriginal;
-    
+    if (globalProperties.fixedLayout) {
+        guerillaPatchForRandom(() => {
+            var layouter = new Dracula.Layout.Spring(g);
+            layouter.layout();
+        });
+    }
+    else {
+        var layouter = new Dracula.Layout.Spring(g);
+        layouter.layout();
+    }
+
     var draculaRenderer = new Dracula.Renderer.Raphael(widgetAnchor, g, widgetWidth, widgetHeight);
     draculaRenderer.draw();
 }
