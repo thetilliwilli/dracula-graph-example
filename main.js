@@ -2,7 +2,7 @@
 //два файла содержащие саму библиотеку (01_rephael.min.js, 02_dracula.min.js) необходимо положить в VIP-Dashboards\Sources\PL\Viewer\Visiology.VA.PL.DashboardViewer\wwwroot\custom
 //
 
-console.log(w);
+//console.log(w);
 
 var widgetId = w.general.renderTo;
 var widgetAnchor = "#" + widgetId;
@@ -11,7 +11,21 @@ var globalColors = w.colors;
 var propertiesJson = JSON.parse(visApi().getWidgetByGuid(widgetId).widgetState.propertiesJson);
 var globalProperties = {
     lineWidth: propertiesJson.lineWidth || 6,
+    fixedLayout: propertiesJson.lineWidth === undefined ? false : propertiesJson.lineWidth
 };
+
+function randomIteratorFactory(varietiesNumber){
+    function* randomGenerator(varietiesNumber) {
+        var i = 0;
+        var preallocatedRandomValues = Array.apply(null, { length: varietiesNumber }).map(_ => Math.random());
+        while (1) yield preallocatedRandomValues[i++ % preallocatedRandomValues.length];
+    };
+    var preallocatedRandomValuesIterator = randomGenerator(varietiesNumber+1);
+    preallocatedRandomValuesIterator.next(); //activation
+    return preallocatedRandomValuesIterator;
+}
+
+var randomIterator = randomIteratorFactory(100);
 
 function convertToGraph(data, vertices, adjacencyList) {
 
@@ -88,22 +102,16 @@ function drawGraph(vertices, adjacencyList) {
 
     vertices.map(vertex => g.addNode(vertex.vertexId, { label: vertex.label, render: VertexRenderer, weight: vertices.calcRelativeWeight(vertex.weight), type: vertex.type }));
 
-    adjacencyList.map(edge => g.addEdge(edge.sourceVertex.vertexId, edge.targetVertex.vertexId, { stroke: "darkgrey", weight: adjacencyList.calcRelativeWeight(edge.edgeWeight) }));
+    adjacencyList.map(edge => g.addEdge(edge.sourceVertex.vertexId, edge.targetVertex.vertexId, { fill: `darkgrey|${1 + globalProperties.lineWidth * adjacencyList.calcRelativeWeight(edge.edgeWeight)}`, stroke: "darkgrey" }));
 
+    var randomOriginal = Math.random;
+    Math.random = () => randomIterator.next().value;
     var layouter = new Dracula.Layout.Spring(g);
     layouter.layout();
-
+    Math.random = randomOriginal;
+    
     var draculaRenderer = new Dracula.Renderer.Raphael(widgetAnchor, g, widgetWidth, widgetHeight);
     draculaRenderer.draw();
-    redrawEdgeThinkness(g);
-    console.log(g);
-}
-
-function redrawEdgeThinkness(graph) {
-    graph.edges.forEach(edge => {
-        edge.shape.fg.attr({ "stroke-width": 1 + globalProperties.lineWidth * edge.style.weight });
-        // edge.shape.label.attr("y", edge.shape.label.attr("y") + 13);
-    });
 }
 
 drawGraph(vertices, adjacencyList);
